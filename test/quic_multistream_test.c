@@ -187,6 +187,7 @@ struct script_op {
 #define OPK_POP_ERR                                 51
 #define OPK_C_WRITE_EX2                             52
 #define OPK_SKIP_IF_BLOCKING                        53
+#define OPK_C_STREAM_RESET_FAIL                     54
 
 #define EXPECT_CONN_CLOSE_APP       (1U << 0)
 #define EXPECT_CONN_CLOSE_REMOTE    (1U << 1)
@@ -285,6 +286,8 @@ struct script_op {
     {OPK_S_READ_FAIL, NULL, (allow_zero_len), NULL, #stream_name},
 #define OP_C_STREAM_RESET(stream_name, aec)  \
     {OPK_C_STREAM_RESET, NULL, 0, NULL, #stream_name, (aec)},
+#define OP_C_STREAM_RESET_FAIL(stream_name, aec)  \
+    {OPK_C_STREAM_RESET_FAIL, NULL, 0, NULL, #stream_name, (aec)},
 #define OP_S_ACCEPT_STREAM_WAIT(stream_name)  \
     {OPK_S_ACCEPT_STREAM_WAIT, NULL, 0, NULL, #stream_name},
 #define OP_NEW_THREAD(num_threads, script) \
@@ -678,6 +681,7 @@ static int helper_init(struct helper *h, const char *script_name,
     QUIC_TSERVER_ARGS s_args = {0};
     union BIO_sock_info_u info;
     char title[128];
+    QTEST_DATA *bdata = NULL;
 
     memset(h, 0, sizeof(*h));
     h->c_fd = -1;
@@ -686,6 +690,10 @@ static int helper_init(struct helper *h, const char *script_name,
     h->blocking = blocking;
     h->need_injector = need_injector;
     h->time_slip = ossl_time_zero();
+
+    bdata = OPENSSL_zalloc(sizeof(QTEST_DATA));
+    if (bdata == NULL)
+        goto err;
 
     if (!TEST_ptr(h->time_lock = CRYPTO_THREAD_lock_new()))
         goto err;
@@ -760,8 +768,8 @@ static int helper_init(struct helper *h, const char *script_name,
         h->qtf = qtest_create_injector(h->s_priv);
         if (!TEST_ptr(h->qtf))
             goto err;
-
-        BIO_set_data(h->s_qtf_wbio, h->qtf);
+        bdata->fault = h->qtf;
+        BIO_set_data(h->s_qtf_wbio, bdata);
     }
 
     h->s_net_bio_own = NULL;
@@ -792,7 +800,7 @@ static int helper_init(struct helper *h, const char *script_name,
         goto err;
 
     /* Use custom time function for virtual time skip. */
-    if (!TEST_true(ossl_quic_conn_set_override_now_cb(h->c_conn, get_time, h)))
+    if (!TEST_true(ossl_quic_set_override_now_cb(h->c_conn, get_time, h)))
         goto err;
 
     /* Takes ownership of our reference to the BIO. */
@@ -1830,6 +1838,7 @@ static int run_script_worker(struct helper *h, const struct script_op *script,
             break;
 
         case OPK_C_STREAM_RESET:
+        case OPK_C_STREAM_RESET_FAIL:
             {
                 SSL_STREAM_RESET_ARGS args = {0};
 
@@ -1837,9 +1846,13 @@ static int run_script_worker(struct helper *h, const struct script_op *script,
                     goto out;
 
                 args.quic_error_code = op->arg2;
-
-                if (!TEST_true(SSL_stream_reset(c_tgt, &args, sizeof(args))))
-                    goto out;
+                if (op->op == OPK_C_STREAM_RESET) {
+                    if (!TEST_true(SSL_stream_reset(c_tgt, &args, sizeof(args))))
+                        goto out;
+                } else {
+                    if (!TEST_false(SSL_stream_reset(c_tgt, &args, sizeof(args))))
+                        goto out;
+                }
             }
             break;
 
@@ -4911,6 +4924,7 @@ static int generate_version_neg(WPACKET *wpkt, uint32_t version)
     QUIC_PKT_HDR hdr = {0};
 
     hdr.type                = QUIC_PKT_TYPE_VERSION_NEG;
+    hdr.version             = 0;
     hdr.fixed               = 1;
     hdr.dst_conn_id.id_len  = 0;
     hdr.src_conn_id.id_len  = 8;
@@ -4972,10 +4986,64 @@ err:
     return rc;
 }
 
-static const struct script_op script_74[] = {
-    OP_S_SET_INJECT_DATAGRAM (server_gen_version_neg)
-    OP_SET_INJECT_WORD       (1, 0)
+static int do_mutation = 0;
+static QUIC_PKT_HDR *hdr_to_free = NULL;
 
+/*
+ * Check packets to transmit, if we have an initial packet
+ * Modify the version number to something incorrect
+ * so that we trigger a version negotiation
+ * Note, this is a use once function, it will only modify the
+ * first INITIAL packet it sees, after which it needs to be
+ * armed again
+ */
+static int script_74_alter_version(const QUIC_PKT_HDR *hdrin,
+                                   const OSSL_QTX_IOVEC *iovecin, size_t numin,
+                                   QUIC_PKT_HDR **hdrout,
+                                   const OSSL_QTX_IOVEC **iovecout,
+                                   size_t *numout,
+                                   void *arg)
+{
+    *hdrout = OPENSSL_memdup(hdrin, sizeof(QUIC_PKT_HDR));
+    *iovecout = iovecin;
+    *numout = numin;
+    hdr_to_free = *hdrout;
+
+    if (do_mutation == 0)
+        return 1;
+    do_mutation = 0;
+
+    if (hdrin->type == QUIC_PKT_TYPE_INITIAL)
+        (*hdrout)->version = 0xdeadbeef;
+    return 1;
+}
+
+static void script_74_finish_mutation(void *arg)
+{
+    OPENSSL_free(hdr_to_free);
+}
+
+/*
+ * Enable the packet mutator for the client channel
+ * So that when we send a Initial packet
+ * We modify the version to be something invalid
+ * to force a version negotiation
+ */
+static int script_74_arm_packet_mutator(struct helper *h,
+                                        struct helper_local *hl)
+{
+    QUIC_CHANNEL *ch = ossl_quic_conn_get_channel(h->c_conn);
+
+    do_mutation = 1;
+    if (!ossl_quic_channel_set_mutator(ch, script_74_alter_version,
+                                       script_74_finish_mutation,
+                                       NULL))
+        return 0;
+    return 1;
+}
+
+static const struct script_op script_74[] = {
+    OP_CHECK                (script_74_arm_packet_mutator, 0)
     OP_C_SET_ALPN            ("ossltest")
     OP_C_CONNECT_WAIT        ()
 
@@ -5484,7 +5552,6 @@ ossl_unused static int script_85_poll(struct helper *h, struct helper_local *hl)
 {
     int ok = 1, ret, expected_ret = 1;
     static const struct timeval timeout = {0};
-    static const struct timeval nz_timeout = {0, 1};
     size_t result_count, expected_result_count = 0;
     SSL_POLL_ITEM items[5] = {0}, *item = items;
     SSL *c_a, *c_b, *c_c, *c_d;
@@ -5522,16 +5589,6 @@ ossl_unused static int script_85_poll(struct helper *h, struct helper_local *hl)
     item->revents = UINT64_MAX;
     ++item;
 
-    /* Non-zero timeout is not supported. */
-    result_count = SIZE_MAX;
-    ERR_set_mark();
-    if (!TEST_false(SSL_poll(items, OSSL_NELEM(items), sizeof(SSL_POLL_ITEM),
-                             &nz_timeout, 0,
-                             &result_count))
-        || !TEST_size_t_eq(result_count, 0))
-        return 0;
-
-    ERR_pop_to_mark();
     result_count = SIZE_MAX;
     ret = SSL_poll(items, OSSL_NELEM(items), sizeof(SSL_POLL_ITEM),
                    &timeout, 0,
@@ -5716,6 +5773,26 @@ static const struct script_op script_86[] = {
     OP_END
 };
 
+
+/* 87. Test stream reset functionality */
+static const struct script_op script_87[] = {
+    OP_C_SET_ALPN           ("ossltest")
+    OP_C_CONNECT_WAIT       ()
+    OP_C_NEW_STREAM_BIDI    (a, C_BIDI_ID(0))
+    OP_C_WRITE              (a, "apple", 5)
+    OP_C_CONCLUDE           (a)
+    OP_S_BIND_STREAM_ID     (a, C_BIDI_ID(0))
+    OP_S_READ_EXPECT        (a, "apple", 5)
+    OP_S_EXPECT_FIN         (a)
+    OP_S_WRITE              (a, "orange", 6)
+    OP_C_READ_EXPECT        (a, "orange", 6)
+    OP_S_CONCLUDE           (a)
+    OP_C_EXPECT_FIN         (a)
+    OP_SLEEP                (1000)
+    OP_C_STREAM_RESET_FAIL  (a, 42)
+    OP_END
+};
+
 static const struct script_op *const scripts[] = {
     script_1,
     script_2,
@@ -5802,7 +5879,8 @@ static const struct script_op *const scripts[] = {
     script_83,
     script_84,
     script_85,
-    script_86
+    script_86,
+    script_87
 };
 
 static int test_script(int idx)

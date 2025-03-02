@@ -46,13 +46,13 @@ echo "   OpenSSL version:    $OPENSSL_VERSION"
 echo "------------------------------------------------------------------"
 
 if [ ! -d $SRCTOP/oqs-provider/.local ]; then
-# this version of oqsprovider dependent on v0.10.0 of liboqs, so set this;
+# this version of oqsprovider dependent on v0.11.0 of liboqs, so set this;
 # also be sure to use this openssl for liboqs-internal OpenSSL use;
 # see all libops config options listed at
 # https://github.com/open-quantum-safe/liboqs/wiki/Customizing-liboqs
 (
        cd $SRCTOP/oqs-provider \
-           && git clone --depth 1 --branch 0.10.0 https://github.com/open-quantum-safe/liboqs.git \
+           && git clone --depth 1 --branch 0.11.0 https://github.com/open-quantum-safe/liboqs.git \
            && cd liboqs \
            && mkdir build \
            && cd build \

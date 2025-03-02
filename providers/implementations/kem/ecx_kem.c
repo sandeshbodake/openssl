@@ -162,6 +162,7 @@ static void *ecxkem_newctx(void *provctx)
     if (ctx == NULL)
         return NULL;
     ctx->libctx = PROV_LIBCTX_OF(provctx);
+    ctx->mode = KEM_MODE_DHKEM;
 
     return ctx;
 }
@@ -248,7 +249,7 @@ static int ecxkem_set_ctx_params(void *vctx, const OSSL_PARAM params[])
 
     if (ctx == NULL)
         return 0;
-    if (params == NULL)
+    if (ossl_param_is_empty(params))
         return 1;
 
     p = OSSL_PARAM_locate_const(params, OSSL_KEM_PARAM_IKME);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2023 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2019-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -430,7 +430,7 @@ static void *dsa_gen_init(void *provctx, int selection,
         OSSL_FIPS_IND_INIT(gctx)
     }
     if (!dsa_gen_set_params(gctx, params)) {
-        OPENSSL_free(gctx);
+        dsa_gen_cleanup(gctx);
         gctx = NULL;
     }
     return gctx;
@@ -470,7 +470,7 @@ static int dsa_gen_set_params(void *genctx, const OSSL_PARAM params[])
 
     if (gctx == NULL)
         return 0;
-    if (params == NULL)
+    if (ossl_param_is_empty(params))
         return 1;
 
     if (!OSSL_FIPS_IND_SET_CTX_PARAM(gctx, OSSL_FIPS_IND_SETTABLE0, params,
@@ -562,7 +562,7 @@ static int dsa_gen_get_params(void *genctx, OSSL_PARAM *params)
 
     if (gctx == NULL)
         return 0;
-    if (params == NULL)
+    if (ossl_param_is_empty(params))
         return 1;
     if (!OSSL_FIPS_IND_GET_CTX_PARAM(gctx, params))
         return 0;
@@ -631,7 +631,7 @@ static void *dsa_gen(void *genctx, OSSL_CALLBACK *osslcb, void *cbarg)
                     && (gctx->gen_type <= DSA_PARAMGEN_TYPE_FIPS_DEFAULT))) {
         ERR_raise_data(ERR_LIB_PROV, ERR_R_INTERNAL_ERROR,
                        "gen_type set to unsupported value %d", gctx->gen_type);
-        return NULL;
+        goto end;
     }
 
     gctx->cb = osslcb;

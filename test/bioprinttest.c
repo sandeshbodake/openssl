@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2020 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2016-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -149,7 +149,7 @@ static j_data jf_data[] = {
     { 0xffffffffffffffffULL, "%jx", "ffffffffffffffff" },
     { 0x8000000000000000ULL, "%ju", "9223372036854775808" },
     /*
-     * These tests imply two's-complement, but it's the only binary
+     * These tests imply two's complement, but it's the only binary
      * representation we support, see test/sanitytest.c...
      */
     { 0x8000000000000000ULL, "%ji", "-9223372036854775808" },

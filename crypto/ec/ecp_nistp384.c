@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2023-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -1560,7 +1560,7 @@ void ossl_ec_nistp384_pre_comp_free(NISTP384_PRE_COMP *p)
         return;
 
     CRYPTO_DOWN_REF(&p->references, &i);
-    REF_PRINT_COUNT("ossl_ec_nistp384", p);
+    REF_PRINT_COUNT("ossl_ec_nistp384", i, p);
     if (i > 0)
         return;
     REF_ASSERT_ISNT(i < 0);

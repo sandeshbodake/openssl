@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2023 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -252,13 +252,14 @@ BIGNUM *BN_new(void)
     return ret;
 }
 
- BIGNUM *BN_secure_new(void)
- {
-     BIGNUM *ret = BN_new();
-     if (ret != NULL)
-         ret->flags |= BN_FLG_SECURE;
-     return ret;
- }
+BIGNUM *BN_secure_new(void)
+{
+    BIGNUM *ret = BN_new();
+
+    if (ret != NULL)
+        ret->flags |= BN_FLG_SECURE;
+    return ret;
+}
 
 /* This is used by bn_expand2() */
 /* The caller MUST check that words > b->dmax before calling this */

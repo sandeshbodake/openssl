@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2023 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2011-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -1876,7 +1876,7 @@ void EC_nistp256_pre_comp_free(NISTP256_PRE_COMP *pre)
         return;
 
     CRYPTO_DOWN_REF(&pre->references, &i);
-    REF_PRINT_COUNT("EC_nistp256", pre);
+    REF_PRINT_COUNT("EC_nistp256", i, pre);
     if (i > 0)
         return;
     REF_ASSERT_ISNT(i < 0);

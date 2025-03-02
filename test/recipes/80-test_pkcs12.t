@@ -56,7 +56,7 @@ $ENV{OPENSSL_WIN32_UTF8}=1;
 
 my $no_fips = disabled('fips') || ($ENV{NO_FIPS} // 0);
 
-plan tests => $no_fips ? 45 : 51;
+plan tests => $no_fips ? 47 : 53;
 
 # Test different PKCS#12 formats
 ok(run(test(["pkcs12_format_test"])), "test pkcs12 formats");
@@ -247,6 +247,14 @@ for my $file ("pbmac1_256_256.bad-iter.p12", "pbmac1_256_256.bad-salt.p12", "pbm
         );
 }
 
+# Test pbmac1 pkcs12 file with absent PBKDF2 PRF, usually omitted when selecting sha1
+{
+    my $file = "pbmac1_sha1_hmac_and_prf.p12";
+    my $path = srctop_file("test", "recipes", "80-test_pkcs12_data", $file);
+    ok(run(app(["openssl", "pkcs12", "-in", $path, "-password", "pass:1234", "-noenc"])),
+      "test pbmac1 pkcs12 file $file");
+}
+
 # Test some bad pkcs12 files
 my $bad1 = srctop_file("test", "recipes", "80-test_pkcs12_data", "bad1.p12");
 my $bad2 = srctop_file("test", "recipes", "80-test_pkcs12_data", "bad2.p12");
@@ -279,6 +287,13 @@ with({ exit_checker => sub { return shift == 1; } },
                     "-info"])),
            "test bad pkcs12 file 3 (info)");
      });
+
+# Test that mac verification doesn't fail when mac is absent in the file
+{
+    my $nomac = srctop_file("test", "recipes", "80-test_pkcs12_data", "nomac_parse.p12");
+    ok(run(app(["openssl", "pkcs12", "-in", $nomac, "-passin", "pass:testpassword"])),
+       "test pkcs12 file without MAC");
+}
 
 # Test with Oracle Trusted Key Usage specified in openssl.cnf
 {

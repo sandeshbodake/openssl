@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2022 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2000-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -369,8 +369,7 @@ static char *md5crypt(const char *passwd, const char *magic, const char *salt)
     if (magic_len > 0)
         salt_out += 2 + magic_len;
 
-    if (salt_len > 8)
-        goto err;
+    assert(salt_len <= 8);
 
     md = EVP_MD_CTX_new();
     if (md == NULL
@@ -589,7 +588,8 @@ static char *shacrypt(const char *passwd, const char *magic, const char *salt)
     OPENSSL_strlcat(out_buf, ascii_dollar, sizeof(out_buf));
     if (rounds_custom) {
         char tmp_buf[80]; /* "rounds=999999999" */
-        sprintf(tmp_buf, "rounds=%u", rounds);
+
+        BIO_snprintf(tmp_buf, sizeof(tmp_buf), "rounds=%u", rounds);
 #ifdef CHARSET_EBCDIC
         /* In case we're really on a ASCII based platform and just pretend */
         if (tmp_buf[0] != 0x72)  /* ASCII 'r' */

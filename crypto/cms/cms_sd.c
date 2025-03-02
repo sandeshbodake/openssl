@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2008-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -356,14 +356,19 @@ CMS_SignerInfo *CMS_add1_signer(CMS_ContentInfo *cms,
     /* Call for side-effect of computing hash and caching extensions */
     X509_check_purpose(signer, -1, -1);
 
-    X509_up_ref(signer);
-    EVP_PKEY_up_ref(pk);
+    if (!X509_up_ref(signer))
+        goto err;
+    if (!EVP_PKEY_up_ref(pk)) {
+        X509_free(signer);
+        goto err;
+    }
 
     si->cms_ctx = ctx;
     si->pkey = pk;
     si->signer = signer;
     si->mctx = EVP_MD_CTX_new();
     si->pctx = NULL;
+    si->omit_signing_time = 0;
 
     if (si->mctx == NULL) {
         ERR_raise(ERR_LIB_CMS, ERR_R_EVP_LIB);
@@ -455,6 +460,14 @@ CMS_SignerInfo *CMS_add1_signer(CMS_ContentInfo *cms,
                 ERR_raise(ERR_LIB_CMS, ERR_R_CMS_LIB);
                 goto err;
             }
+        }
+        if ((flags & CMS_NO_SIGNING_TIME) != 0) {
+            /*
+             * The signing-time signed attribute (NID_pkcs9_signingTime)
+             * would normally be added later, in CMS_SignerInfo_sign(),
+             * unless we set this flag here
+             */
+            si->omit_signing_time = 1;
         }
         if (flags & CMS_CADES) {
             ESS_SIGNING_CERT *sc = NULL;
@@ -624,7 +637,8 @@ STACK_OF(X509) *CMS_get0_signers(CMS_ContentInfo *cms)
 void CMS_SignerInfo_set1_signer_cert(CMS_SignerInfo *si, X509 *signer)
 {
     if (signer != NULL) {
-        X509_up_ref(signer);
+        if (!X509_up_ref(signer))
+            return;
         EVP_PKEY_free(si->pkey);
         si->pkey = X509_get_pubkey(signer);
     }
@@ -839,7 +853,8 @@ int CMS_SignerInfo_sign(CMS_SignerInfo *si)
                     si->digestAlgorithm->algorithm, 0) <= 0)
         return 0;
 
-    if (CMS_signed_get_attr_by_NID(si, NID_pkcs9_signingTime, -1) < 0) {
+    if (!si->omit_signing_time
+        && CMS_signed_get_attr_by_NID(si, NID_pkcs9_signingTime, -1) < 0) {
         if (!cms_add1_signingTime(si, NULL))
             goto err;
     }

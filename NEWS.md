@@ -7,6 +7,8 @@ release. For more details please read the CHANGES file.
 OpenSSL Releases
 ----------------
 
+ - [OpenSSL 3.5](#openssl-35)
+ - [OpenSSL 3.4](#openssl-34)
  - [OpenSSL 3.3](#openssl-33)
  - [OpenSSL 3.2](#openssl-32)
  - [OpenSSL 3.1](#openssl-31)
@@ -18,15 +20,54 @@ OpenSSL Releases
  - [OpenSSL 1.0.0](#openssl-100)
  - [OpenSSL 0.9.x](#openssl-09x)
 
-OpenSSL 3.4
+OpenSSL 3.5
 -----------
 
-### Major changes between OpenSSL 3.3 and OpenSSL 3.4 [under development]
+### Major changes between OpenSSL 3.4 and OpenSSL 3.5 [under development]
 
-OpenSSL 3.4.0 is a feature release adding significant new functionality to
+OpenSSL 3.5.0 is a feature release adding significant new functionality to
 OpenSSL.
 
 This release is in development.
+
+This release incorporates the following potentially significant or incompatible
+changes:
+
+  * Default encryption cipher for the `req`, `cms`, and `smime` applications
+    changed from `des-ede3-cbc` to `aes-256-cbc`.
+
+This release adds the following new features:
+
+  * Allow the FIPS provider to optionally use the `JITTER` seed source.
+    Because this seed source is not part of the OpenSSL FIPS validations,
+    it should only be enabled after the [jitterentropy-library] has been
+    assessed for entropy quality.  Moreover, the FIPS provider including
+    this entropy source will need to obtain an [ESV] from the [CMVP] before
+    FIPS compliance can be claimed.  Enable this using the configuration
+    option `enable-fips-jitter`.
+
+  * Support for central key generation in CMP
+
+OpenSSL 3.4
+-----------
+
+### Major changes between OpenSSL 3.4.0 and OpenSSL 3.4.1 [under development]
+
+OpenSSL 3.4.1 is a security patch release. The most severe CVE fixed in this
+release is High.
+
+This release incorporates the following bug fixes and mitigations:
+
+  * Fixed RFC7250 handshakes with unauthenticated servers don't abort as expected.
+    ([CVE-2024-12797])
+
+  * Fixed timing side-channel in ECDSA signature computation.
+    ([CVE-2024-13176])
+
+### Major changes between OpenSSL 3.3 and OpenSSL 3.4.0 [22 Oct 2024]
+
+OpenSSL 3.4.0 is a feature release adding significant new functionality to
+OpenSSL.
 
 This release incorporates the following potentially significant or incompatible
 changes:
@@ -76,7 +117,7 @@ This release adds the following new features:
   * Support for integrity-only cipher suites TLS_SHA256_SHA256 and
     TLS_SHA384_SHA384 in TLS 1.3, as defined in RFC 9150
 
-  * Support for requesting CRL in CMP
+  * Support for retrieving certificate request templates and CRLs in CMP
 
   * Support for additional X.509v3 extensions related to Attribute Certificates
 
@@ -88,7 +129,31 @@ This release adds the following new features:
 OpenSSL 3.3
 -----------
 
-### Major changes between OpenSSL 3.3.0 and OpenSSL 3.3.1 [under development]
+### Major changes between OpenSSL 3.3.2 and OpenSSL 3.3.3 [under development]
+
+OpenSSL 3.3.3 is a security patch release. The most severe CVE fixed in this
+release is Low.
+
+This release incorporates the following bug fixes and mitigations:
+
+  * Fixed possible OOB memory access with invalid low-level GF(2^m) elliptic
+    curve parameters.
+    ([CVE-2024-9143])
+
+### Major changes between OpenSSL 3.3.1 and OpenSSL 3.3.2 [3 Sep 2024]
+
+OpenSSL 3.3.2 is a security patch release. The most severe CVE fixed in this
+release is Moderate.
+
+This release incorporates the following bug fixes and mitigations:
+
+  * Fixed possible denial of service in X.509 name checks
+    ([CVE-2024-6119])
+
+  * Fixed possible buffer overread in SSL_select_next_proto()
+    ([CVE-2024-5535])
+
+### Major changes between OpenSSL 3.3.0 and OpenSSL 3.3.1 [4 Jun 2024]
 
 OpenSSL 3.3.1 is a security patch release. The most severe CVE fixed in this
 release is Low.
@@ -163,6 +228,8 @@ This release adds the following new features:
 
   * Added X509_STORE_get1_objects to avoid issues with the existing
     X509_STORE_get0_objects API in multi-threaded applications.
+
+  * Support for using certificate profiles and extened delayed delivery in CMP
 
 This release incorporates the following potentially significant or incompatible
 changes:
@@ -1796,6 +1863,10 @@ OpenSSL 0.9.x
 
 <!-- Links -->
 
+[CVE-2024-13176]: https://www.openssl.org/news/vulnerabilities.html#CVE-2024-13176
+[CVE-2024-9143]: https://www.openssl.org/news/vulnerabilities.html#CVE-2024-9143
+[CVE-2024-6119]: https://www.openssl.org/news/vulnerabilities.html#CVE-2024-6119
+[CVE-2024-5535]: https://www.openssl.org/news/vulnerabilities.html#CVE-2024-5535
 [CVE-2024-4741]: https://www.openssl.org/news/vulnerabilities.html#CVE-2024-4741
 [CVE-2024-4603]: https://www.openssl.org/news/vulnerabilities.html#CVE-2024-4603
 [CVE-2024-2511]: https://www.openssl.org/news/vulnerabilities.html#CVE-2024-2511
@@ -1971,3 +2042,6 @@ OpenSSL 0.9.x
 [CHANGES.md]: ./CHANGES.md
 [README-QUIC.md]: ./README-QUIC.md
 [issue tracker]: https://github.com/openssl/openssl/issues
+[CMVP]: https://csrc.nist.gov/projects/cryptographic-module-validation-program
+[ESV]: https://csrc.nist.gov/Projects/cryptographic-module-validation-program/entropy-validations
+[jitterentropy-library]: https://github.com/smuellerDD/jitterentropy-library
